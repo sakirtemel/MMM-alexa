@@ -4054,13 +4054,79 @@ exports.isBuffer = function (obj) {
 
 },{}],21:[function(require,module,exports){
 const AVS = require('alexa-voice-service');
+const initializeAVS = require('./initializeAVS');
 
-function alexaRunner(config){
+function alexaRunner(config, sendNotification){
     var self  = this;
 
     this.config = config;
+    this.sendNotification = sendNotification;
+
+    this.avs = null;
+    this.listening = false;
+
+    this.initialize = function(){
+        initializeAVS(self);
+
+        sendNotification('ALEXA_CREATED');
+    };
 }
 
 window.alexaRunner = alexaRunner;
 module.exports = alexaRunner;
-},{"alexa-voice-service":1}]},{},[21]);
+},{"./initializeAVS":22,"alexa-voice-service":1}],22:[function(require,module,exports){
+function initializeAVS(alexaRunner){
+    var self = this;
+
+    this.initialize = function(){
+        alexaRunner.avs = new AVS({
+            clientId: alexaRunner.config['avsClientId'],
+            clientSecret: alexaRunner.config['avsClientSecret'],
+            deviceId: alexaRunner.config['avsDeviceId'],
+            deviceSerialNumber: 1234,
+            token: localStorage.getItem('avsToken'),
+            refreshToken: localStorage.getItem('avsRefreshToken')
+        });
+
+        alexaRunner.avs.on(AVS.EventTypes.TOKEN_SET, function(){
+            alexaRunner.sendNotification('ALEXA_TOKEN_SET');
+        });
+
+        alexaRunner.avs.on(AVS.EventTypes.RECORD_START, function(){
+            alexaRunner.sendNotification('ALEXA_RECORD_START');
+        });
+
+        alexaRunner.avs.on(AVS.EventTypes.RECORD_STOP, function(){
+            alexaRunner.sendNotification('ALEXA_RECORD_STOP');
+        });
+    };
+
+    this.saveTokens = function(){
+        alexaRunner.avs.getToken().then((token) => localStorage.setItem('avsToken', token));
+        alexaRunner.avs.getRefreshToken().then((refreshToken) => localStorage.setItem('avsRefreshToken', refreshToken));
+        localStorage.setItem('avsInitialCode', alexaRunner.config['avsInitialCode']);
+    };
+
+    this.login = function(){
+        var useCode = localStorage.getItem('avsInitialCode') !== alexaRunner.config['avsInitialCode'];
+
+        if(useCode){
+            alexaRunner.avs.getTokenFromCode(alexaRunner.config['avsInitialCode'])
+                .then(() => alexaRunner.avs.refreshToken())
+                .then(() => self.saveTokens())
+                .then(() => alexaRunner.avs.requestMic())
+                .catch((error) => {console.log(error);});
+        }else{
+            alexaRunner.avs.refreshToken()
+                .then(() => self.saveTokens())
+                .then(() => alexaRunner.avs.requestMic())
+                .catch((error) => {console.log(error);});
+        }
+    };
+
+    this.initialize();
+    this.login();
+}
+
+module.exports = initializeAVS;
+},{}]},{},[21]);

@@ -2,9 +2,13 @@ Module.register("alexa",{
     defaults: {
     },
     start: function(){
+        this.alexaRunner = new window.alexaRunner(this.config, function(notification){
+        //    TODO: send global notification
+            console.log(notification);
+        });
     },
     getDom: function() {
-        var wrapper = document.createElement("div");
+        var wrapper = document.createElement('div');
 
         wrapper.className = 'alexa-notInitialized';
         wrapper.id = 'alexa';
@@ -20,5 +24,10 @@ Module.register("alexa",{
         return [
             this.file('alexa.css')
         ];
+    },
+    notificationReceived: function(notification, payload, sender) {
+        if(notification === 'DOM_OBJECTS_CREATED'){
+            this.alexaRunner.initialize();
+        }
     }
 });
