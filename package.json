@@ -1,0 +1,23 @@
+{
+  "name": "alexa",
+  "version": "1.0.0",
+  "description": "Alexa module for MagicMirror",
+  "main": "alexa.js",
+  "scripts": {
+    "watch": "./node_modules/watchify/bin/cmd.js  ./src/alexaRunner.js -o ./alexaRunner.babel.js -v"
+  },
+  "author": "Sakir Temel <sakirtemel@gmail.com> (http://about.me/sakir/)",
+  "license": "MIT",
+  "dependencies": {
+    "alexa-voice-service": "^0.0.7",
+    "body-parser": "^1.15.0",
+    "cors": "^2.7.1",
+    "http-message-parser": "^0.0.20",
+    "multer": "^1.1.0",
+    "request": "^2.72.0"
+  },
+  "devDependencies": {
+    "babelify": "^7.2.0",
+    "watchify": "^3.7.0"
+  }
+}
