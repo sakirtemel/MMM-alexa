@@ -20,3 +20,7 @@ modules: [
 ## Configuration options
 
 The following properties can be configured:
+
+## Initial code
+
+[https://sakirtemel.github.io/MMM-alexa/](https://sakirtemel.github.io/MMM-alexa/)

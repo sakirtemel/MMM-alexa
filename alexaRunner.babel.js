@@ -4085,6 +4085,7 @@ function initializeAVS(alexaRunner){
             deviceId: alexaRunner.config['avsDeviceId'],
             deviceSerialNumber: 1234,
             token: localStorage.getItem('avsToken'),
+            redirectUri: 'https://sakirtemel.github.io/MMM-alexa/',
             refreshToken: localStorage.getItem('avsRefreshToken')
         });
 
