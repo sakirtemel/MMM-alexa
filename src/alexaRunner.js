@@ -1,5 +1,6 @@
 const AVS = require('alexa-voice-service');
 const initializeAVS = require('./initializeAVS');
+const setStatus = require('./setStatus');
 
 function alexaRunner(config, sendNotification){
     var self  = this;
@@ -9,6 +10,10 @@ function alexaRunner(config, sendNotification){
 
     this.avs = null;
     this.listening = false;
+
+    this.notificationReceived = function(notification){
+        setStatus(self, notification);
+    };
 
     this.initialize = function(){
         initializeAVS(self);

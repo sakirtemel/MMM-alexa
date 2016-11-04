@@ -4055,6 +4055,7 @@ exports.isBuffer = function (obj) {
 },{}],21:[function(require,module,exports){
 const AVS = require('alexa-voice-service');
 const initializeAVS = require('./initializeAVS');
+const setStatus = require('./setStatus');
 
 function alexaRunner(config, sendNotification){
     var self  = this;
@@ -4065,6 +4066,10 @@ function alexaRunner(config, sendNotification){
     this.avs = null;
     this.listening = false;
 
+    this.notificationReceived = function(notification){
+        setStatus(self, notification);
+    };
+
     this.initialize = function(){
         initializeAVS(self);
 
@@ -4074,7 +4079,7 @@ function alexaRunner(config, sendNotification){
 
 window.alexaRunner = alexaRunner;
 module.exports = alexaRunner;
-},{"./initializeAVS":22,"alexa-voice-service":1}],22:[function(require,module,exports){
+},{"./initializeAVS":22,"./setStatus":23,"alexa-voice-service":1}],22:[function(require,module,exports){
 function initializeAVS(alexaRunner){
     var self = this;
 
@@ -4130,4 +4135,26 @@ function initializeAVS(alexaRunner){
 }
 
 module.exports = initializeAVS;
+},{}],23:[function(require,module,exports){
+function setStatus(alexaRunner, notification){
+    if (alexaRunner.config['hideStatusIndicator']){
+        return true;
+    }
+
+    var statusIndicator = document.getElementById('alexa');
+
+    switch(notification){
+        case 'ALEXA_TOKEN_SET':
+            statusIndicator.className = 'alexa-tokenSet';
+            break;
+        case 'ALEXA_RECORD_START':
+            statusIndicator.className = 'alexa-recordStart';
+            break;
+        case 'ALEXA_RECORD_STOP':
+            statusIndicator.className = 'alexa-recordStop';
+            break;
+    }
+}
+
+module.exports = setStatus;
 },{}]},{},[21]);
