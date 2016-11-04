@@ -1,4 +1,4 @@
-Module.register("alexa",{
+Module.register("MMM-alexa",{
     defaults: {
     },
     start: function(){
