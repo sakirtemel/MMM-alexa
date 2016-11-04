@@ -1,0 +1,50 @@
+<html>
+    <head>
+        <script type="text/javascript">
+            function requestCode(){
+                var clientId = document.getElementById('clientId').value;
+                var deviceId = document.getElementById('deviceId').value;
+                var deviceSerialNumber = document.getElementById('deviceSerialNumber').value;
+                var redirectUri = window.location.href.split('?')[0];
+
+                var scopeData = {
+                    "alexa:all": {
+                        productID: deviceId,
+                        productInstanceAttributes: {
+                            deviceSerialNumber: deviceSerialNumber
+                        }
+                    }
+                };
+
+                var authUrl = "https://www.amazon.com/ap/oa?client_id=" + clientId + "&scope=alexa%3Aall&scope_data=" + encodeURIComponent(JSON.stringify(scopeData))+ "&response_type=code&redirect_uri=" + encodeURI(redirectUri);
+
+                window.location.href = authUrl;
+            }
+
+            function getParameterByName(name) {
+                url = window.location.href;
+
+                name = name.replace(/[\[\]]/g, "\\$&");
+                var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+                        results = regex.exec(url);
+                if (!results) return null;
+                if (!results[2]) return '';
+                return decodeURIComponent(results[2].replace(/\+/g, " "));
+            }
+
+            document.addEventListener("DOMContentLoaded", function(event) {
+                var initialCode = getParameterByName('code');
+                if (initialCode){
+                    document.getElementById('code').innerHTML = "Initial Code: " + initialCode;
+                }
+            });
+        </script>
+    </head>
+    <body>
+        Client id: <input id="clientId"/><br/>
+        Device id: <input id="deviceId"/><br/>
+        Device serial number: <input id="deviceSerialNumber"/><br/>
+        <input type="button" id="request_code" value="Request code" onClick="requestCode();"/>
+        <div id="code"></div>
+    </body>
+</html>
