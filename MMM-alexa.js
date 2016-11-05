@@ -13,11 +13,11 @@ Module.register("MMM-alexa",{
 
         if(this.config['debug']){
             window.alexaStart = function(){
-                sendNotification('ALEXA_RECORD_START');
+                sendNotification('ALEXA_START_RECORDING');
             };
 
             window.alexaStop = function(){
-                sendNotification('ALEXA_RECORD_STOP');
+                sendNotification('ALEXA_STOP_RECORDING');
             };
         }
     },

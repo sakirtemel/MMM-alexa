@@ -4056,6 +4056,8 @@ exports.isBuffer = function (obj) {
 const AVS = require('alexa-voice-service');
 const initializeAVS = require('./initializeAVS');
 const setStatus = require('./setStatus');
+const processSpeech = require('./processSpeech');
+const runDirectives = require('./runDirectives');
 
 function alexaRunner(config, sendNotification){
     var self  = this;
@@ -4068,6 +4070,21 @@ function alexaRunner(config, sendNotification){
 
     this.notificationReceived = function(notification){
         setStatus(self, notification);
+
+        if(notification === 'ALEXA_START_RECORDING'){
+            if(!self.listening){
+                self.listening = true;
+                self.avs.startRecording();
+            }
+        }else if(notification === 'ALEXA_STOP_RECORDING'){
+            if(self.listening){
+                self.listening = false;
+                processSpeech(self).then(({directives, audioMap}) => {
+                    runDirectives(self, directives, audioMap);
+                });
+            }
+
+        }
     };
 
     this.initialize = function(){
@@ -4079,7 +4096,7 @@ function alexaRunner(config, sendNotification){
 
 window.alexaRunner = alexaRunner;
 module.exports = alexaRunner;
-},{"./initializeAVS":22,"./setStatus":23,"alexa-voice-service":1}],22:[function(require,module,exports){
+},{"./initializeAVS":22,"./processSpeech":23,"./runDirectives":24,"./setStatus":25,"alexa-voice-service":1}],22:[function(require,module,exports){
 function initializeAVS(alexaRunner){
     var self = this;
 
@@ -4136,6 +4153,141 @@ function initializeAVS(alexaRunner){
 
 module.exports = initializeAVS;
 },{}],23:[function(require,module,exports){
+function processSpeech(alexaRunner){
+    return new Promise((resolve, reject) => {
+        var audioMap = {};
+
+        alexaRunner.avs.stopRecording().then(dataView => {
+            alexaRunner.avs.sendAudio(dataView).then(({xhr, response}) => {
+                var directives = null;
+
+                // message parsing, assigning directives and audio
+                if (response.multipart.length) {
+                    response.multipart.forEach(multipart => {
+                        let body = multipart.body;
+                        if (multipart.headers && multipart.headers['Content-Type'] === 'application/json') {
+                            try {
+                                body = JSON.parse(body);
+                            } catch (error) {
+                                console.error(error);
+                            }
+
+                            if (body && body.messageBody && body.messageBody.directives) {
+                                directives = body.messageBody.directives;
+                            }
+                        } else if (multipart.headers['Content-Type'] === 'audio/mpeg') {
+                            const start = multipart.meta.body.byteOffset.start;
+                            const end = multipart.meta.body.byteOffset.end;
+
+                            /**
+                             * Not sure if bug in buffer module or in http message parser
+                             * because it's joining arraybuffers so I have to this to
+                             * seperate them out.
+                             */
+                            var slicedBody = xhr.response.slice(start, end);
+
+                            audioMap[multipart.headers['Content-ID']] = slicedBody;
+                        }
+                    });
+                    resolve({directives, audioMap});
+                }
+            }).catch(error => { console.error(error); /* send audio error */ });
+        });
+    });
+}
+
+module.exports = processSpeech;
+},{}],24:[function(require,module,exports){
+function runDirectives(alexaRunner, directives, audioMap){
+    var self = this;
+
+    this.audioMap = audioMap;
+    this.alexaRunner = alexaRunner;
+
+    this.findAudioFromContentId = function(contentId) {
+        contentId = contentId.replace('cid:', '');
+        for (var key in self.audioMap) {
+            if (key.indexOf(contentId) > -1) {
+                return self.audioMap[key];
+            }
+        }
+    };
+
+    // commands
+    this.SpeechSynthesizerSpeak = function(directive){
+        const contentId = directive.payload.audioContent;
+        const audio = self.findAudioFromContentId(contentId);
+        if (audio) {
+            self.alexaRunner.avs.audioToBlob(audio);
+            return self.alexaRunner.avs.player.enqueue(audio);
+        }
+    };
+
+    this.AudioPlayerPlay = function(directive){
+        const streams = directive.payload.audioItem.streams;
+        streams.forEach(stream => {
+            const streamUrl = stream.streamUrl;
+
+            const audio = self.findAudioFromContentId(streamUrl);
+
+            if (audio) {
+                self.alexaRunner.avs.audioToBlob(audio);
+                return self.alexaRunner.avs.player.enqueue(audio);
+            } else if (streamUrl.indexOf('http') > -1) {
+                const xhr = new XMLHttpRequest();
+                const url = `/parse-m3u?url=${streamUrl.replace(/!.*$/, '')}`;
+                xhr.open('GET', url, true);
+                xhr.responseType = 'json';
+                xhr.onload = (event) => {
+                    const urls = event.currentTarget.response;
+
+                    urls.forEach(url => {
+                        self.alexaRunner.avs.player.enqueue(url);
+                    });
+                };
+                xhr.send();
+
+                return function(){};
+            }
+        });
+    };
+
+    this.SpeechRecognizerListen = function(directive){
+        const timeout = directive.payload.timeoutIntervalInMillis;
+        // enable mic
+        // beep
+
+        return function(){
+            //beep
+            setTimeout(function(){
+                self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
+            }, 2000);
+        }();
+    };
+
+    var promises = [];
+
+    // directive running
+    directives.forEach(directive => {
+        if (directive.namespace === 'SpeechSynthesizer' && directive.name === 'speak'){
+            promises.push(self.SpeechSynthesizerSpeak(directive));
+        } else if (directive.namespace === 'AudioPlayer' && directive.name === 'play') {
+            promises.push(self.AudioPlayerPlay(directive));
+        } else if (directive.namespace === 'SpeechRecognizer' && directive.name === 'listen') {
+            promises.push(self.SpeechRecognizerListen(directive));
+        }
+    });
+
+    // promise running
+    if (promises.length) {
+        Promise.all(promises).then(() => {
+            self.alexaRunner.avs.player.playQueue();
+        });
+    }
+}
+
+module.exports = runDirectives;
+},{}],25:[function(require,module,exports){
 function setStatus(alexaRunner, notification){
     if (alexaRunner.config['hideStatusIndicator']){
         return true;
