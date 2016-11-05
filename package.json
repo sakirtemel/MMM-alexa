@@ -1,6 +1,6 @@
 {
-  "name": "alexa",
-  "version": "1.0.0",
+  "name": "MMM-alexa",
+  "version": "0.0.1",
   "description": "Alexa module for MagicMirror",
   "main": "alexa.js",
   "scripts": {
