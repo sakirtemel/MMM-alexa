@@ -10,6 +10,7 @@ Module.register("MMM-alexa",{
         };
 
         this.alexaRunner = new window.alexaRunner(this.config, sendNotification);
+        this.sendSocketNotification('SET_CONFIG', this.config);
 
         if(this.config['debug']){
             window.alexaStart = function(){
