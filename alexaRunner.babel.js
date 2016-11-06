@@ -720,7 +720,7 @@ class AVS {
 
 module.exports = AVS;
 
-},{"./AmazonErrorCodes.js":3,"./Observable.js":4,"./Player.js":5,"./utils/arrayBufferToString.js":7,"./utils/downsampleBuffer.js":8,"./utils/interleave.js":9,"./utils/mergeBuffers.js":10,"./utils/writeUTFBytes.js":11,"buffer":14,"http-message-parser":12,"qs":17}],3:[function(require,module,exports){
+},{"./AmazonErrorCodes.js":3,"./Observable.js":4,"./Player.js":5,"./utils/arrayBufferToString.js":7,"./utils/downsampleBuffer.js":8,"./utils/interleave.js":9,"./utils/mergeBuffers.js":10,"./utils/writeUTFBytes.js":11,"buffer":16,"http-message-parser":12,"qs":20}],3:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -1565,7 +1565,36 @@ module.exports = writeUTFBytes;
 })(this);
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"buffer":14}],13:[function(require,module,exports){
+},{"buffer":16}],13:[function(require,module,exports){
+var frequencyToIndex = require('audio-frequency-to-index')
+
+module.exports = analyserFrequencyAverage.bind(null, 255)
+module.exports.floatData = analyserFrequencyAverage.bind(null, 1)
+
+function analyserFrequencyAverage (div, analyser, frequencies, minHz, maxHz) {
+  var sampleRate = analyser.context.sampleRate
+  var binCount = analyser.frequencyBinCount
+  var start = frequencyToIndex(minHz, sampleRate, binCount)
+  var end = frequencyToIndex(maxHz, sampleRate, binCount)
+  var count = end - start
+  var sum = 0
+  for (; start < end; start++) {
+    sum += frequencies[start] / div
+  }
+  return count === 0 ? 0 : (sum / count)
+}
+
+},{"audio-frequency-to-index":14}],14:[function(require,module,exports){
+var clamp = require('clamp')
+
+module.exports = frequencyToIndex
+function frequencyToIndex (frequency, sampleRate, frequencyBinCount) {
+  var nyquist = sampleRate / 2
+  var index = Math.round(frequency / nyquist * frequencyBinCount)
+  return clamp(index, 0, frequencyBinCount)
+}
+
+},{"clamp":17}],15:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -1681,7 +1710,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],14:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (global){
 /*!
  * The buffer module from node.js, for the browser.
@@ -3474,7 +3503,16 @@ function isnan (val) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":13,"ieee754":15,"isarray":16}],15:[function(require,module,exports){
+},{"base64-js":15,"ieee754":18,"isarray":19}],17:[function(require,module,exports){
+module.exports = clamp
+
+function clamp(value, min, max) {
+  return min < max
+    ? (value < min ? min : value > max ? max : value)
+    : (value < max ? max : value > min ? min : value)
+}
+
+},{}],18:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -3560,14 +3598,14 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],16:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
   return toString.call(arr) == '[object Array]';
 };
 
-},{}],17:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 var Stringify = require('./stringify');
@@ -3578,7 +3616,7 @@ module.exports = {
     parse: Parse
 };
 
-},{"./parse":18,"./stringify":19}],18:[function(require,module,exports){
+},{"./parse":21,"./stringify":22}],21:[function(require,module,exports){
 'use strict';
 
 var Utils = require('./utils');
@@ -3747,7 +3785,7 @@ module.exports = function (str, opts) {
     return Utils.compact(obj);
 };
 
-},{"./utils":20}],19:[function(require,module,exports){
+},{"./utils":23}],22:[function(require,module,exports){
 'use strict';
 
 var Utils = require('./utils');
@@ -3886,7 +3924,7 @@ module.exports = function (object, opts) {
     return keys.join(delimiter);
 };
 
-},{"./utils":20}],20:[function(require,module,exports){
+},{"./utils":23}],23:[function(require,module,exports){
 'use strict';
 
 var hexTable = (function () {
@@ -4052,12 +4090,190 @@ exports.isBuffer = function (obj) {
     return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
 };
 
-},{}],21:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
+'use strict';
+
+var analyserFrequency = require('analyser-frequency-average');
+
+module.exports = function(audioContext, stream, opts) {
+
+  opts = opts || {};
+
+  var defaults = {
+    fftSize: 1024,
+    bufferLen: 1024,
+    smoothingTimeConstant: 0.2,
+    minCaptureFreq: 85,         // in Hz
+    maxCaptureFreq: 255,        // in Hz
+    noiseCaptureDuration: 0,    // in ms
+    minNoiseLevel: 0.4,         // from 0 to 1
+    maxNoiseLevel: 0.7,         // from 0 to 1
+    avgNoiseMultiplier: 1.2,
+    onVoiceStart: function() {},
+    onVoiceStop: function() {},
+    onUpdate: function(val) {}
+  };
+
+  var options = {};
+  for (var key in defaults) {
+    options[key] = opts.hasOwnProperty(key) ? opts[key] : defaults[key];
+  }
+
+  var baseLevel = 0;
+  var activityCounter = 0;
+  var activityCounterMin = 0;
+  var activityCounterMax = 60;
+  var activityCounterThresh = 5;
+
+  var envFreqRange = [];
+  var isNoiseCapturing = true;
+  var prevVadState = undefined;
+  var vadState = false;
+  var captureTimeout = null;
+
+  var source = audioContext.createMediaStreamSource(stream);
+  var analyser = audioContext.createAnalyser();
+  analyser.smoothingTimeConstant = options.smoothingTimeConstant;
+  analyser.fftSize = options.fftSize;
+
+  var scriptProcessorNode = audioContext.createScriptProcessor(options.bufferLen, 1, 1);
+  connect();
+  scriptProcessorNode.onaudioprocess = monitor;
+
+  if (isNoiseCapturing) {
+    //console.log('VAD: start noise capturing');
+    captureTimeout = setTimeout(init, options.noiseCaptureDuration);
+  }
+
+  function init() {
+    //console.log('VAD: stop noise capturing');
+    isNoiseCapturing = false;
+
+    var averageEnvFreq = (envFreqRange.reduce(function(p, c) {
+        return p + c;
+      }, 0) / envFreqRange.length) || 0;
+
+    baseLevel = averageEnvFreq * options.avgNoiseMultiplier;
+    if (baseLevel < options.minNoiseLevel) baseLevel = options.minNoiseLevel;
+    if (baseLevel > options.maxNoiseLevel) baseLevel = options.maxNoiseLevel;
+
+    //console.log('VAD: base level:', baseLevel);
+  }
+
+  function connect() {
+    source.connect(analyser);
+    analyser.connect(scriptProcessorNode);
+    scriptProcessorNode.connect(audioContext.destination);
+  }
+
+  function disconnect() {
+    scriptProcessorNode.disconnect();
+  }
+
+  function destroy() {
+    captureTimeout && clearTimeout(captureTimeout);
+    disconnect();
+  }
+
+  function monitor() {
+    var frequencies = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(frequencies);
+
+    var average = analyserFrequency(analyser, frequencies, options.minCaptureFreq, options.maxCaptureFreq);
+    if (isNoiseCapturing) {
+      envFreqRange.push(average);
+      return;
+    }
+
+    if (average >= baseLevel && activityCounter < activityCounterMax) {
+      activityCounter++;
+    } else if (average < baseLevel && activityCounter > activityCounterMin) {
+      activityCounter--;
+    }
+    vadState = activityCounter > activityCounterThresh;
+
+    if (prevVadState !== vadState) {
+      vadState ? onVoiceStart() : onVoiceStop();
+      prevVadState = vadState;
+    }
+
+    options.onUpdate(average);
+  }
+
+  function onVoiceStart() {
+    options.onVoiceStart();
+  }
+
+  function onVoiceStop() {
+    options.onVoiceStop();
+  }
+
+  return {connect: connect, disconnect: disconnect, destroy: destroy};
+};
+},{"analyser-frequency-average":13}],25:[function(require,module,exports){
+const vad = require('voice-activity-detection');
+
+function VoiceActivityDetector(onStart, onStop){
+    var self = this;
+
+    this.onStart = onStart;
+    this.onStop = onStop;
+    this.audioContext = null;
+    this.listening = false;
+
+    this.initialize = function(){
+        try {
+            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+            self.audioContext = new AudioContext();
+
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+            navigator.getUserMedia({audio: true},
+                self._startUserMedia,
+                function(){
+                    console.warn('Could not connect microphone. Possible rejected by the user or is blocked by the browser.');
+                });
+        } catch (e) {
+            console.warn('Mic input is not supported by the browser.');
+        }
+    };
+
+    this.startDetection = function(){
+        self.listening = true;
+    };
+
+    this.stopDetection = function(){
+        self.listening = false;
+    };
+
+    this._startUserMedia = function(stream){
+        var options = {
+            onVoiceStart: function () {
+                if(self.listening){
+                    self.onStart();
+                }
+            },
+            onVoiceStop: function(){
+                if(self.listening){
+                    self.listening = false;
+                    self.onStop();
+                }
+            },
+            onUpdate: function (val) {
+                //console.log('curr val:', val);
+            }
+        };
+        vad(self.audioContext, stream, options);
+    };
+}
+
+module.exports = VoiceActivityDetector;
+},{"voice-activity-detection":24}],26:[function(require,module,exports){
 const AVS = require('alexa-voice-service');
 const initializeAVS = require('./initializeAVS');
 const setStatus = require('./setStatus');
 const processSpeech = require('./processSpeech');
 const runDirectives = require('./runDirectives');
+const VoiceActivityDetector = require('./VoiceActivityDetector');
 
 function alexaRunner(config, sendNotification){
     var self  = this;
@@ -4067,6 +4283,7 @@ function alexaRunner(config, sendNotification){
 
     this.avs = null;
     this.listening = false;
+    this.voiceActivityDetector = null;
 
     this.notificationReceived = function(notification){
         setStatus(self, notification);
@@ -4075,10 +4292,19 @@ function alexaRunner(config, sendNotification){
             if(!self.listening){
                 self.listening = true;
                 self.avs.startRecording();
+
+                if(self.voiceActivityDetector){
+                    self.voiceActivityDetector.startDetection();
+                }
             }
         }else if(notification === 'ALEXA_STOP_RECORDING'){
             if(self.listening){
                 self.listening = false;
+
+                if(self.voiceActivityDetector){
+                    self.voiceActivityDetector.stopDetection();
+                }
+
                 processSpeech(self).then(({directives, audioMap}) => {
                     runDirectives(self, directives, audioMap);
                 });
@@ -4090,13 +4316,23 @@ function alexaRunner(config, sendNotification){
     this.initialize = function(){
         initializeAVS(self);
 
+        if(!self.config['disableVoiceActivityDetection']){
+            this.voiceActivityDetector = new VoiceActivityDetector(function(){
+                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
+            }, function(){
+                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_STOP');
+                self.sendNotification('ALEXA_STOP_RECORDING');
+            });
+            this.voiceActivityDetector.initialize();
+        }
+
         sendNotification('ALEXA_CREATED');
     };
 }
 
 window.alexaRunner = alexaRunner;
 module.exports = alexaRunner;
-},{"./initializeAVS":22,"./processSpeech":23,"./runDirectives":24,"./setStatus":25,"alexa-voice-service":1}],22:[function(require,module,exports){
+},{"./VoiceActivityDetector":25,"./initializeAVS":27,"./processSpeech":28,"./runDirectives":29,"./setStatus":30,"alexa-voice-service":1}],27:[function(require,module,exports){
 function initializeAVS(alexaRunner){
     var self = this;
 
@@ -4152,7 +4388,7 @@ function initializeAVS(alexaRunner){
 }
 
 module.exports = initializeAVS;
-},{}],23:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 function processSpeech(alexaRunner){
     return new Promise((resolve, reject) => {
         var audioMap = {};
@@ -4197,7 +4433,7 @@ function processSpeech(alexaRunner){
 }
 
 module.exports = processSpeech;
-},{}],24:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 function runDirectives(alexaRunner, directives, audioMap){
     var self = this;
 
@@ -4287,7 +4523,7 @@ function runDirectives(alexaRunner, directives, audioMap){
 }
 
 module.exports = runDirectives;
-},{}],25:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 function setStatus(alexaRunner, notification){
     if (alexaRunner.config['hideStatusIndicator']){
         return true;
@@ -4309,4 +4545,4 @@ function setStatus(alexaRunner, notification){
 }
 
 module.exports = setStatus;
-},{}]},{},[21]);
+},{}]},{},[26]);

@@ -14,7 +14,8 @@
     "cors": "^2.7.1",
     "http-message-parser": "^0.0.20",
     "multer": "^1.1.0",
-    "request": "^2.72.0"
+    "request": "^2.72.0",
+    "voice-activity-detection": "^0.0.3"
   },
   "devDependencies": {
     "babelify": "^7.2.0",
