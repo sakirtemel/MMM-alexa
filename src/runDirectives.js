@@ -58,10 +58,15 @@ function runDirectives(alexaRunner, directives, audioMap){
         // beep
 
         return function(){
-            //beep
-            setTimeout(function(){
-                self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
-            }, 2000);
+            if (directives.length > 1){
+                self.alexaRunner.avs.player.on(AVS.Player.EventTypes.ENDED, () => {
+                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
+                });
+            }else{
+                setTimeout(function(){
+                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
+                }, 2000);
+            }
         }();
     };
 
