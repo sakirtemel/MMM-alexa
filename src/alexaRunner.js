@@ -24,7 +24,9 @@ function alexaRunner(config, sendNotification){
                 self.avs.startRecording();
 
                 if(self.voiceActivityDetector){
-                    self.voiceActivityDetector.startDetection();
+                    setTimeout(function(){
+                        self.voiceActivityDetector.startDetection();
+                    }, 1000);
                 }
             }
         }else if(notification === 'ALEXA_STOP_RECORDING'){

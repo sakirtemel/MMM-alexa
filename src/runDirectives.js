@@ -59,7 +59,7 @@ function runDirectives(alexaRunner, directives, audioMap){
 
         return function(){
             if (directives.length > 1){
-                self.alexaRunner.avs.player.on(AVS.Player.EventTypes.ENDED, () => {
+                self.alexaRunner.avs.player.one(AVS.Player.EventTypes.ENDED, () => {
                     self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
                 });
             }else{

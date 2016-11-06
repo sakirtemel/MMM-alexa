@@ -4220,6 +4220,7 @@ function VoiceActivityDetector(onStart, onStop){
     this.onStop = onStop;
     this.audioContext = null;
     this.listening = false;
+    this.firstWordSpoken = false;
 
     this.initialize = function(){
         try {
@@ -4239,6 +4240,14 @@ function VoiceActivityDetector(onStart, onStop){
 
     this.startDetection = function(){
         self.listening = true;
+        self.firstWordSpoken = false;
+
+        setTimeout(function(){
+            if(self.listening && !self.firstWordSpoken){
+                // timeout
+                self._onVoiceStop();
+            }
+        }, 3000);
     };
 
     this.stopDetection = function(){
@@ -4249,20 +4258,26 @@ function VoiceActivityDetector(onStart, onStop){
         var options = {
             onVoiceStart: function () {
                 if(self.listening){
+                    if(!self.firstWordSpoken){
+                        self.firstWordSpoken = true;
+                    }
+
                     self.onStart();
                 }
             },
-            onVoiceStop: function(){
-                if(self.listening){
-                    self.listening = false;
-                    self.onStop();
-                }
-            },
+            onVoiceStop: self._onVoiceStop,
             onUpdate: function (val) {
                 //console.log('curr val:', val);
             }
         };
         vad(self.audioContext, stream, options);
+    };
+
+    this._onVoiceStop = function(){
+        if(self.listening){
+            self.listening = false;
+            self.onStop();
+        }
     };
 }
 
@@ -4294,7 +4309,9 @@ function alexaRunner(config, sendNotification){
                 self.avs.startRecording();
 
                 if(self.voiceActivityDetector){
-                    self.voiceActivityDetector.startDetection();
+                    setTimeout(function(){
+                        self.voiceActivityDetector.startDetection();
+                    }, 1000);
                 }
             }
         }else if(notification === 'ALEXA_STOP_RECORDING'){
@@ -4495,7 +4512,7 @@ function runDirectives(alexaRunner, directives, audioMap){
 
         return function(){
             if (directives.length > 1){
-                self.alexaRunner.avs.player.on(AVS.Player.EventTypes.ENDED, () => {
+                self.alexaRunner.avs.player.one(AVS.Player.EventTypes.ENDED, () => {
                     self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
                 });
             }else{
