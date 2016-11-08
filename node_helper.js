@@ -17,6 +17,7 @@ module.exports = NodeHelper.create({
 
                 process.on('SIGINT', function () {
                     button.unexport();
+                    Gpio.unwatchAll();
                 });
 
                 var self = this;
@@ -25,7 +26,7 @@ module.exports = NodeHelper.create({
                     if (err) { throw err; }
 
                     if(value === 1){
-                        if(self.lastPressedTime === null || (self.lastPressedTime !== null && (new Date() - self.lastPressedTime) > 2)){
+                        if(self.lastPressedTime === null || (self.lastPressedTime !== null && (new Date() - self.lastPressedTime) > 2000)){
                             self.lastPressedTime = new Date();
                             self.sendSocketNotification('ALEXA_START_RECORDING', {});
                         }

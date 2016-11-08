@@ -45,6 +45,11 @@ Module.register("MMM-alexa",{
             this.file('alexa.css')
         ];
     },
+    socketNotificationReceived: function(notification, payload) {
+        if(notification.startsWith('ALEXA_')){
+            this.alexaRunner.notificationReceived(notification);
+        }
+    },
     notificationReceived: function(notification, payload, sender) {
         if(notification === 'DOM_OBJECTS_CREATED'){
             this.alexaRunner.initialize();
