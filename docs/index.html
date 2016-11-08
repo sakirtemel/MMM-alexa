@@ -35,15 +35,17 @@
             document.addEventListener("DOMContentLoaded", function(event) {
                 var initialCode = getParameterByName('code');
                 if (initialCode){
-                    document.getElementById('code').innerHTML = "Initial Code: " + initialCode;
+                    document.getElementById('code').innerHTML = "Initial Code: " + "<b>" + initialCode + "</b>";
                 }
             });
         </script>
     </head>
     <body>
-        Client id: <input id="clientId"/><br/>
-        Device id: <input id="deviceId"/><br/>
-        Device serial number: <input id="deviceSerialNumber"/><br/>
+        <h1>AVS Code generator for authentication</h1>
+        Don't forget to add <i>https://sakirtemel.github.io/MMM-alexa/</i> to security list.<br/><br/>
+        Client id: <input id="clientId" size="60"/><br/>
+        Device id: <input id="deviceId" size="60"/><br/>
+        Device serial number: <input id="deviceSerialNumber" value="1234"/><br/>
         <input type="button" id="request_code" value="Request code" onClick="requestCode();"/>
         <div id="code"></div>
     </body>

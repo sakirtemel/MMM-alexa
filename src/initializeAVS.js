@@ -48,8 +48,12 @@ function initializeAVS(alexaRunner){
         }
     };
 
-    this.initialize();
-    this.login();
+    return new Promise((resolve, reject) => {
+        self.initialize();
+        self.login();
+
+        resolve();
+    });
 }
 
 module.exports = initializeAVS;

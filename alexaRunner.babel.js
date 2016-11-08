@@ -4092,7 +4092,6 @@ exports.isBuffer = function (obj) {
 
 },{}],24:[function(require,module,exports){
 'use strict';
-
 var analyserFrequency = require('analyser-frequency-average');
 
 module.exports = function(audioContext, stream, opts) {
@@ -4105,13 +4104,16 @@ module.exports = function(audioContext, stream, opts) {
     smoothingTimeConstant: 0.2,
     minCaptureFreq: 85,         // in Hz
     maxCaptureFreq: 255,        // in Hz
-    noiseCaptureDuration: 0,    // in ms
-    minNoiseLevel: 0.4,         // from 0 to 1
+    noiseCaptureDuration: 1000, // in ms
+    minNoiseLevel: 0.3,         // from 0 to 1
     maxNoiseLevel: 0.7,         // from 0 to 1
     avgNoiseMultiplier: 1.2,
-    onVoiceStart: function() {},
-    onVoiceStop: function() {},
-    onUpdate: function(val) {}
+    onVoiceStart: function() {
+    },
+    onVoiceStop: function() {
+    },
+    onUpdate: function(val) {
+    }
   };
 
   var options = {};
@@ -4120,6 +4122,7 @@ module.exports = function(audioContext, stream, opts) {
   }
 
   var baseLevel = 0;
+  var voiceScale = 1;
   var activityCounter = 0;
   var activityCounterMin = 0;
   var activityCounterMax = 60;
@@ -4149,13 +4152,16 @@ module.exports = function(audioContext, stream, opts) {
     //console.log('VAD: stop noise capturing');
     isNoiseCapturing = false;
 
-    var averageEnvFreq = (envFreqRange.reduce(function(p, c) {
-        return p + c;
-      }, 0) / envFreqRange.length) || 0;
+    envFreqRange = envFreqRange.filter(function(val) {
+      return val;
+    }).sort();
+    var averageEnvFreq = envFreqRange.length ? envFreqRange.reduce((p, c) => Math.min(p, c), 1) : (options.minNoiseLevel || 0.1);
 
     baseLevel = averageEnvFreq * options.avgNoiseMultiplier;
-    if (baseLevel < options.minNoiseLevel) baseLevel = options.minNoiseLevel;
-    if (baseLevel > options.maxNoiseLevel) baseLevel = options.maxNoiseLevel;
+    if (options.minNoiseLevel && baseLevel < options.minNoiseLevel) baseLevel = options.minNoiseLevel;
+    if (options.maxNoiseLevel && baseLevel > options.maxNoiseLevel) baseLevel = options.maxNoiseLevel;
+
+    voiceScale = 1 - baseLevel;
 
     //console.log('VAD: base level:', baseLevel);
   }
@@ -4197,7 +4203,7 @@ module.exports = function(audioContext, stream, opts) {
       prevVadState = vadState;
     }
 
-    options.onUpdate(average);
+    options.onUpdate(Math.max(0, average - baseLevel) / voiceScale);
   }
 
   function onVoiceStart() {
@@ -4342,19 +4348,19 @@ function alexaRunner(config, sendNotification){
     };
 
     this.initialize = function(){
-        initializeAVS(self);
+        initializeAVS(self).then(() => {
+            if(!self.config['disableVoiceActivityDetection']){
+                self.voiceActivityDetector = new VoiceActivityDetector(function(){
+                    self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
+                }, function(){
+                    self.sendNotification('ALEXA_VAD_VOICE_DETECTION_STOP');
+                    self.sendNotification('ALEXA_STOP_RECORDING');
+                });
+                self.voiceActivityDetector.initialize();
+            }
 
-        if(!self.config['disableVoiceActivityDetection']){
-            this.voiceActivityDetector = new VoiceActivityDetector(function(){
-                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
-            }, function(){
-                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_STOP');
-                self.sendNotification('ALEXA_STOP_RECORDING');
-            });
-            this.voiceActivityDetector.initialize();
-        }
-
-        sendNotification('ALEXA_CREATED');
+            self.sendNotification('ALEXA_CREATED');
+        });
     };
 }
 
@@ -4411,8 +4417,12 @@ function initializeAVS(alexaRunner){
         }
     };
 
-    this.initialize();
-    this.login();
+    return new Promise((resolve, reject) => {
+        self.initialize();
+        self.login();
+
+        resolve();
+    });
 }
 
 module.exports = initializeAVS;

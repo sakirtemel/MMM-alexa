@@ -46,19 +46,19 @@ function alexaRunner(config, sendNotification){
     };
 
     this.initialize = function(){
-        initializeAVS(self);
+        initializeAVS(self).then(() => {
+            if(!self.config['disableVoiceActivityDetection']){
+                self.voiceActivityDetector = new VoiceActivityDetector(function(){
+                    self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
+                }, function(){
+                    self.sendNotification('ALEXA_VAD_VOICE_DETECTION_STOP');
+                    self.sendNotification('ALEXA_STOP_RECORDING');
+                });
+                self.voiceActivityDetector.initialize();
+            }
 
-        if(!self.config['disableVoiceActivityDetection']){
-            this.voiceActivityDetector = new VoiceActivityDetector(function(){
-                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
-            }, function(){
-                self.sendNotification('ALEXA_VAD_VOICE_DETECTION_STOP');
-                self.sendNotification('ALEXA_STOP_RECORDING');
-            });
-            this.voiceActivityDetector.initialize();
-        }
-
-        sendNotification('ALEXA_CREATED');
+            self.sendNotification('ALEXA_CREATED');
+        });
     };
 }
 
