@@ -17,7 +17,7 @@ module.exports = NodeHelper.create({
 
                 process.on('SIGINT', function () {
                     button.unexport();
-                    Gpio.unwatchAll();
+                    process.exit();
                 });
 
                 var self = this;

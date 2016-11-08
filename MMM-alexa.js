@@ -10,7 +10,6 @@ Module.register("MMM-alexa",{
         };
 
         this.alexaRunner = new window.alexaRunner(this.config, sendNotification);
-        this.sendSocketNotification('SET_CONFIG', this.config);
 
         if(this.config['debug']){
             window.alexaStart = function(){
@@ -53,6 +52,7 @@ Module.register("MMM-alexa",{
     notificationReceived: function(notification, payload, sender) {
         if(notification === 'DOM_OBJECTS_CREATED'){
             this.alexaRunner.initialize();
+            this.sendSocketNotification('SET_CONFIG', this.config);
         }
 
         if(notification.startsWith('ALEXA_')){
