@@ -1,4 +1,6 @@
-var NodeHelper = require("node_helper");
+var NodeHelper = require('node_helper');
+var enableSnowboyHotwordDetection = require('./src/enableSnowboyHotwordDetection');
+const request = require('request');
 
 var pin = 4;
 
@@ -6,10 +8,35 @@ module.exports = NodeHelper.create({
     start: function() {
         this.config = null;
         this.lastPressedTime = null;
+        this.expressApp.get('/parse-m3u', function (req, res) {
+            const m3uUrl = req.query.url;
+
+            if (!m3uUrl) {
+                return res.json([]);
+            }
+
+            const urls = [];
+
+            request(m3uUrl, function(error, response, bodyResponse) {
+                if (bodyResponse) {
+                    urls.push(bodyResponse);
+                }
+
+                res.json(urls);
+            });
+        });
     },
     socketNotificationReceived: function(notification, payload) {
         if(notification === 'SET_CONFIG'){
             this.config = payload;
+            var self = this;
+
+            // TODO: make here configurable
+            if(1){
+                enableSnowboyHotwordDetection(function(){
+                    self.sendSocketNotification('ALEXA_START_RECORDING', {});
+                });
+            }
 
             if(this.config['enableRaspberryButton']){
                 var Gpio = require('onoff').Gpio,
@@ -19,8 +46,6 @@ module.exports = NodeHelper.create({
                     button.unexport();
                     process.exit();
                 });
-
-                var self = this;
 
                 button.watch(function (err, value) {
                     if (err) { throw err; }

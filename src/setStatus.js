@@ -19,3 +19,5 @@ function setStatus(alexaRunner, notification){
 }
 
 module.exports = setStatus;
+
+// TODO : add one more state color, and also connect this to the fsm

@@ -13,6 +13,7 @@
     "body-parser": "^1.15.0",
     "cors": "^2.7.1",
     "http-message-parser": "^0.0.20",
+    "javascript-state-machine": "^2.4.0",
     "multer": "^1.1.0",
     "node-record-lpcm16": "^0.2.0",
     "onoff": "^1.1.1",

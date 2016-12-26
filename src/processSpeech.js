@@ -36,7 +36,10 @@ function processSpeech(alexaRunner){
                     });
                     resolve({directives, audioMap});
                 }
-            }).catch(error => { console.error(error); /* send audio error */ });
+            }).catch(error => {
+                console.error(error); /* send audio error */
+                reject(error);
+            });
         });
     });
 }

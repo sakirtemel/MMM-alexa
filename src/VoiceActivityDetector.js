@@ -7,8 +7,7 @@ function VoiceActivityDetector(onStart, onStop){
     this.onStop = onStop;
     this.audioContext = null;
     this.listening = false;
-    this.firstWordSpoken = false;
-    this.timeout = null;
+    this.firstWordSpoken = false; // TODO: this also can be moved
 
     this.initialize = function(){
         try {
@@ -29,19 +28,10 @@ function VoiceActivityDetector(onStart, onStop){
     this.startDetection = function(){
         self.listening = true;
         self.firstWordSpoken = false;
-        self._clearTimeout();
-
-        self.timeout = setTimeout(function(){
-            if(self.listening && !self.firstWordSpoken){
-                // timeout
-                self._onVoiceStop();
-            }
-        }, 3000);
     };
 
     this.stopDetection = function(){
         self.listening = false;
-        self._clearTimeout();
     };
 
     this._startUserMedia = function(stream){
@@ -50,7 +40,6 @@ function VoiceActivityDetector(onStart, onStop){
                 if(self.listening){
                     if(!self.firstWordSpoken){
                         self.firstWordSpoken = true;
-                        self._clearTimeout();
                     }
 
                     self.onStart();
@@ -67,14 +56,7 @@ function VoiceActivityDetector(onStart, onStop){
     this._onVoiceStop = function(){
         if(self.listening){
             self.listening = false;
-            self._clearTimeout();
             self.onStop();
-        }
-    };
-
-    this._clearTimeout = function(){
-        if(self.timeout){
-            clearTimeout(self.timeout);
         }
     };
 }

@@ -720,7 +720,7 @@ class AVS {
 
 module.exports = AVS;
 
-},{"./AmazonErrorCodes.js":3,"./Observable.js":4,"./Player.js":5,"./utils/arrayBufferToString.js":7,"./utils/downsampleBuffer.js":8,"./utils/interleave.js":9,"./utils/mergeBuffers.js":10,"./utils/writeUTFBytes.js":11,"buffer":16,"http-message-parser":12,"qs":20}],3:[function(require,module,exports){
+},{"./AmazonErrorCodes.js":3,"./Observable.js":4,"./Player.js":5,"./utils/arrayBufferToString.js":7,"./utils/downsampleBuffer.js":8,"./utils/interleave.js":9,"./utils/mergeBuffers.js":10,"./utils/writeUTFBytes.js":11,"buffer":16,"http-message-parser":12,"qs":21}],3:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -3606,6 +3606,238 @@ module.exports = Array.isArray || function (arr) {
 };
 
 },{}],20:[function(require,module,exports){
+/*
+
+  Javascript State Machine Library - https://github.com/jakesgordon/javascript-state-machine
+
+  Copyright (c) 2012, 2013, 2014, 2015, Jake Gordon and contributors
+  Released under the MIT license - https://github.com/jakesgordon/javascript-state-machine/blob/master/LICENSE
+
+*/
+
+(function () {
+
+  var StateMachine = {
+
+    //---------------------------------------------------------------------------
+
+    VERSION: "2.4.0",
+
+    //---------------------------------------------------------------------------
+
+    Result: {
+      SUCCEEDED:    1, // the event transitioned successfully from one state to another
+      NOTRANSITION: 2, // the event was successfull but no state transition was necessary
+      CANCELLED:    3, // the event was cancelled by the caller in a beforeEvent callback
+      PENDING:      4  // the event is asynchronous and the caller is in control of when the transition occurs
+    },
+
+    Error: {
+      INVALID_TRANSITION: 100, // caller tried to fire an event that was innapropriate in the current state
+      PENDING_TRANSITION: 200, // caller tried to fire an event while an async transition was still pending
+      INVALID_CALLBACK:   300 // caller provided callback function threw an exception
+    },
+
+    WILDCARD: '*',
+    ASYNC: 'async',
+
+    //---------------------------------------------------------------------------
+
+    create: function(cfg, target) {
+
+      var initial      = (typeof cfg.initial == 'string') ? { state: cfg.initial } : cfg.initial; // allow for a simple string, or an object with { state: 'foo', event: 'setup', defer: true|false }
+      var terminal     = cfg.terminal || cfg['final'];
+      var fsm          = target || cfg.target  || {};
+      var events       = cfg.events || [];
+      var callbacks    = cfg.callbacks || {};
+      var map          = {}; // track state transitions allowed for an event { event: { from: [ to ] } }
+      var transitions  = {}; // track events allowed from a state            { state: [ event ] }
+
+      var add = function(e) {
+        var from = Array.isArray(e.from) ? e.from : (e.from ? [e.from] : [StateMachine.WILDCARD]); // allow 'wildcard' transition if 'from' is not specified
+        map[e.name] = map[e.name] || {};
+        for (var n = 0 ; n < from.length ; n++) {
+          transitions[from[n]] = transitions[from[n]] || [];
+          transitions[from[n]].push(e.name);
+
+          map[e.name][from[n]] = e.to || from[n]; // allow no-op transition if 'to' is not specified
+        }
+        if (e.to)
+          transitions[e.to] = transitions[e.to] || [];
+      };
+
+      if (initial) {
+        initial.event = initial.event || 'startup';
+        add({ name: initial.event, from: 'none', to: initial.state });
+      }
+
+      for(var n = 0 ; n < events.length ; n++)
+        add(events[n]);
+
+      for(var name in map) {
+        if (map.hasOwnProperty(name))
+          fsm[name] = StateMachine.buildEvent(name, map[name]);
+      }
+
+      for(var name in callbacks) {
+        if (callbacks.hasOwnProperty(name))
+          fsm[name] = callbacks[name]
+      }
+
+      fsm.current     = 'none';
+      fsm.is          = function(state) { return Array.isArray(state) ? (state.indexOf(this.current) >= 0) : (this.current === state); };
+      fsm.can         = function(event) { return !this.transition && (map[event] !== undefined) && (map[event].hasOwnProperty(this.current) || map[event].hasOwnProperty(StateMachine.WILDCARD)); }
+      fsm.cannot      = function(event) { return !this.can(event); };
+      fsm.transitions = function()      { return (transitions[this.current] || []).concat(transitions[StateMachine.WILDCARD] || []); };
+      fsm.isFinished  = function()      { return this.is(terminal); };
+      fsm.error       = cfg.error || function(name, from, to, args, error, msg, e) { throw e || msg; }; // default behavior when something unexpected happens is to throw an exception, but caller can override this behavior if desired (see github issue #3 and #17)
+      fsm.states      = function() { return Object.keys(transitions).sort() };
+
+      if (initial && !initial.defer)
+        fsm[initial.event]();
+
+      return fsm;
+
+    },
+
+    //===========================================================================
+
+    doCallback: function(fsm, func, name, from, to, args) {
+      if (func) {
+        try {
+          return func.apply(fsm, [name, from, to].concat(args));
+        }
+        catch(e) {
+          return fsm.error(name, from, to, args, StateMachine.Error.INVALID_CALLBACK, "an exception occurred in a caller-provided callback function", e);
+        }
+      }
+    },
+
+    beforeAnyEvent:  function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onbeforeevent'],                       name, from, to, args); },
+    afterAnyEvent:   function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onafterevent'] || fsm['onevent'],      name, from, to, args); },
+    leaveAnyState:   function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onleavestate'],                        name, from, to, args); },
+    enterAnyState:   function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onenterstate'] || fsm['onstate'],      name, from, to, args); },
+    changeState:     function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onchangestate'],                       name, from, to, args); },
+
+    beforeThisEvent: function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onbefore' + name],                     name, from, to, args); },
+    afterThisEvent:  function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onafter'  + name] || fsm['on' + name], name, from, to, args); },
+    leaveThisState:  function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onleave'  + from],                     name, from, to, args); },
+    enterThisState:  function(fsm, name, from, to, args) { return StateMachine.doCallback(fsm, fsm['onenter'  + to]   || fsm['on' + to],   name, from, to, args); },
+
+    beforeEvent: function(fsm, name, from, to, args) {
+      if ((false === StateMachine.beforeThisEvent(fsm, name, from, to, args)) ||
+          (false === StateMachine.beforeAnyEvent( fsm, name, from, to, args)))
+        return false;
+    },
+
+    afterEvent: function(fsm, name, from, to, args) {
+      StateMachine.afterThisEvent(fsm, name, from, to, args);
+      StateMachine.afterAnyEvent( fsm, name, from, to, args);
+    },
+
+    leaveState: function(fsm, name, from, to, args) {
+      var specific = StateMachine.leaveThisState(fsm, name, from, to, args),
+          general  = StateMachine.leaveAnyState( fsm, name, from, to, args);
+      if ((false === specific) || (false === general))
+        return false;
+      else if ((StateMachine.ASYNC === specific) || (StateMachine.ASYNC === general))
+        return StateMachine.ASYNC;
+    },
+
+    enterState: function(fsm, name, from, to, args) {
+      StateMachine.enterThisState(fsm, name, from, to, args);
+      StateMachine.enterAnyState( fsm, name, from, to, args);
+    },
+
+    //===========================================================================
+
+    buildEvent: function(name, map) {
+      return function() {
+
+        var from  = this.current;
+        var to    = map[from] || (map[StateMachine.WILDCARD] != StateMachine.WILDCARD ? map[StateMachine.WILDCARD] : from) || from;
+        var args  = Array.prototype.slice.call(arguments); // turn arguments into pure array
+
+        if (this.transition)
+          return this.error(name, from, to, args, StateMachine.Error.PENDING_TRANSITION, "event " + name + " inappropriate because previous transition did not complete");
+
+        if (this.cannot(name))
+          return this.error(name, from, to, args, StateMachine.Error.INVALID_TRANSITION, "event " + name + " inappropriate in current state " + this.current);
+
+        if (false === StateMachine.beforeEvent(this, name, from, to, args))
+          return StateMachine.Result.CANCELLED;
+
+        if (from === to) {
+          StateMachine.afterEvent(this, name, from, to, args);
+          return StateMachine.Result.NOTRANSITION;
+        }
+
+        // prepare a transition method for use EITHER lower down, or by caller if they want an async transition (indicated by an ASYNC return value from leaveState)
+        var fsm = this;
+        this.transition = function() {
+          fsm.transition = null; // this method should only ever be called once
+          fsm.current = to;
+          StateMachine.enterState( fsm, name, from, to, args);
+          StateMachine.changeState(fsm, name, from, to, args);
+          StateMachine.afterEvent( fsm, name, from, to, args);
+          return StateMachine.Result.SUCCEEDED;
+        };
+        this.transition.cancel = function() { // provide a way for caller to cancel async transition if desired (issue #22)
+          fsm.transition = null;
+          StateMachine.afterEvent(fsm, name, from, to, args);
+        }
+
+        var leave = StateMachine.leaveState(this, name, from, to, args);
+        if (false === leave) {
+          this.transition = null;
+          return StateMachine.Result.CANCELLED;
+        }
+        else if (StateMachine.ASYNC === leave) {
+          return StateMachine.Result.PENDING;
+        }
+        else {
+          if (this.transition) // need to check in case user manually called transition() but forgot to return StateMachine.ASYNC
+            return this.transition();
+        }
+
+      };
+    }
+
+  }; // StateMachine
+
+  //===========================================================================
+
+  //======
+  // NODE
+  //======
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      exports = module.exports = StateMachine;
+    }
+    exports.StateMachine = StateMachine;
+  }
+  //============
+  // AMD/REQUIRE
+  //============
+  else if (typeof define === 'function' && define.amd) {
+    define(function(require) { return StateMachine; });
+  }
+  //========
+  // BROWSER
+  //========
+  else if (typeof window !== 'undefined') {
+    window.StateMachine = StateMachine;
+  }
+  //===========
+  // WEB WORKER
+  //===========
+  else if (typeof self !== 'undefined') {
+    self.StateMachine = StateMachine;
+  }
+
+}());
+
+},{}],21:[function(require,module,exports){
 'use strict';
 
 var Stringify = require('./stringify');
@@ -3616,7 +3848,7 @@ module.exports = {
     parse: Parse
 };
 
-},{"./parse":21,"./stringify":22}],21:[function(require,module,exports){
+},{"./parse":22,"./stringify":23}],22:[function(require,module,exports){
 'use strict';
 
 var Utils = require('./utils');
@@ -3785,7 +4017,7 @@ module.exports = function (str, opts) {
     return Utils.compact(obj);
 };
 
-},{"./utils":23}],22:[function(require,module,exports){
+},{"./utils":24}],23:[function(require,module,exports){
 'use strict';
 
 var Utils = require('./utils');
@@ -3924,7 +4156,7 @@ module.exports = function (object, opts) {
     return keys.join(delimiter);
 };
 
-},{"./utils":23}],23:[function(require,module,exports){
+},{"./utils":24}],24:[function(require,module,exports){
 'use strict';
 
 var hexTable = (function () {
@@ -4090,7 +4322,7 @@ exports.isBuffer = function (obj) {
     return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 'use strict';
 var analyserFrequency = require('analyser-frequency-average');
 
@@ -4216,7 +4448,116 @@ module.exports = function(audioContext, stream, opts) {
 
   return {connect: connect, disconnect: disconnect, destroy: destroy};
 };
-},{"analyser-frequency-average":13}],25:[function(require,module,exports){
+},{"analyser-frequency-average":13}],26:[function(require,module,exports){
+const StateMachine = require('javascript-state-machine');
+const processSpeech = require('./processSpeech');
+const runDirectives = require('./runDirectives');
+
+function Controller(alexaRunner){
+    var self = this;
+
+    this.alexaRunner = alexaRunner;
+
+    this.fsm = StateMachine.create({
+        initial: { state: 'idle', event: 'init', defer: false },
+        error: function(){ console.log('error fsm, last state: ' + self.fsm.current); return -1; },
+        events: [
+            { name: 'listen',  from: 'idle',  to: 'listening' },
+            { name: 'stop', from: 'listening', to: 'stoppedAndWaiting' }, // it was * before
+            { name: 'answerReceived', from: 'stoppedAndWaiting', to: 'playing' },
+            { name: 'listen', from: 'stoppedAndWaiting', to: 'waitingToListenAgain' }, //but it shouldn't be hotword detection
+            { name: 'listen', from: 'playing', to: 'waitingToListenAgain' }, //but it shouldn't be hotword detection
+            { name: 'finish', from: 'waitingToListenAgain', to: 'listening' }, //but first clear
+            { name: 'finish', from: 'playing', to: 'idle' }, // ?? think
+            // { name: 'listen', from: 'playing', to: 'listening' }, //?? maybe played state
+            { name: 'errorx', from: '*', to: 'idle' },
+        ],
+        callbacks: {
+            onlistening: function(){
+                self.alexaRunner.voiceActivityDetector.stopDetection();
+
+                alexaRunner.avs.stopRecording().then(dataView => {
+                    // send record command
+                    console.log('-- RECORDING');
+                    self.alexaRunner.avs.startRecording();
+                    // start vad after 1 second
+                    self.startVAD();
+                });
+            },
+            onstoppedAndWaiting: function(){
+                console.log('-- STOPPED AND WAITING');
+
+                //    stop VAD
+                self.alexaRunner.voiceActivityDetector.stopDetection();
+
+                // stop recording
+                processSpeech(self.alexaRunner).then(({directives, audioMap}) => {
+                    self.fsm.answerReceived();
+                    runDirectives(self.alexaRunner, directives, audioMap);
+                }).catch(error => {
+                    //    error occurred
+                    self.fsm.errorx();
+                });
+            },
+            onerrorx: function(){
+                console.log('-- ERROR OCCURRED EVENT');
+                // clear
+                // stop everything
+                // beep
+            },
+            onidle: function(){
+                console.log('-- IDLE');
+                // clear
+            }
+            // ,
+            // onlisten: function(){
+            //     // on re listening, clear
+            // }
+        }
+    });
+
+    this.startVAD = function(){
+        if(self.startVADTimeout) {
+            self.startVADTimeout = undefined;
+            clearTimeout(startVADTimeout);
+        }
+
+        self.startVADTimeout = setTimeout(function(){
+            self.startVADTimeout = undefined;
+            self.alexaRunner.voiceActivityDetector.startDetection();
+        }, 1000);
+    };
+}
+
+module.exports = Controller;
+
+//VAD: first word spoken timeout 3 seconds
+// if(self.listening && !self.firstWordSpoken){
+//     // timeout
+//     self._onVoiceStop();
+// }
+
+
+// fsm.warn() - transition from 'green' to 'yellow'
+// fsm.panic() - transition from 'yellow' to 'red'
+// fsm.calm() - transition from 'red' to 'yellow'
+// fsm.clear() - transition from 'yellow' to 'green'
+// along with the following members:
+//
+//     fsm.current - contains the current state
+// fsm.is(s) - return true if state s is the current state
+// fsm.can(e) - return true if event e can be fired in the current state
+// fsm.cannot(e) - return true if event e cannot be fired in the current state
+// fsm.transitions() - return list of events that are allowed from the current state
+// fsm.states() - return list of all possible states.
+
+// onpanic:  function(event, from, to, msg) { alert('panic! ' + msg);               },
+// onclear:  function(event, from, to, msg) { alert('thanks to ' + msg);            },
+// ongreen:  function(event, from, to)      { document.body.className = 'green';    },
+// onyellow: function(event, from, to)      { document.body.className = 'yellow';   },
+// onred:    function(event, from, to)      { document.body.className = 'red';      },
+//TODO: what happens if there are more than 1 audio playing, wait until player queue is empty
+},{"./processSpeech":30,"./runDirectives":31,"javascript-state-machine":20}],27:[function(require,module,exports){
 const vad = require('voice-activity-detection');
 
 function VoiceActivityDetector(onStart, onStop){
@@ -4226,8 +4567,7 @@ function VoiceActivityDetector(onStart, onStop){
     this.onStop = onStop;
     this.audioContext = null;
     this.listening = false;
-    this.firstWordSpoken = false;
-    this.timeout = null;
+    this.firstWordSpoken = false; // TODO: this also can be moved
 
     this.initialize = function(){
         try {
@@ -4248,19 +4588,10 @@ function VoiceActivityDetector(onStart, onStop){
     this.startDetection = function(){
         self.listening = true;
         self.firstWordSpoken = false;
-        self._clearTimeout();
-
-        self.timeout = setTimeout(function(){
-            if(self.listening && !self.firstWordSpoken){
-                // timeout
-                self._onVoiceStop();
-            }
-        }, 3000);
     };
 
     this.stopDetection = function(){
         self.listening = false;
-        self._clearTimeout();
     };
 
     this._startUserMedia = function(stream){
@@ -4269,7 +4600,6 @@ function VoiceActivityDetector(onStart, onStop){
                 if(self.listening){
                     if(!self.firstWordSpoken){
                         self.firstWordSpoken = true;
-                        self._clearTimeout();
                     }
 
                     self.onStart();
@@ -4286,26 +4616,18 @@ function VoiceActivityDetector(onStart, onStop){
     this._onVoiceStop = function(){
         if(self.listening){
             self.listening = false;
-            self._clearTimeout();
             self.onStop();
-        }
-    };
-
-    this._clearTimeout = function(){
-        if(self.timeout){
-            clearTimeout(self.timeout);
         }
     };
 }
 
 module.exports = VoiceActivityDetector;
-},{"voice-activity-detection":24}],26:[function(require,module,exports){
+},{"voice-activity-detection":25}],28:[function(require,module,exports){
 const AVS = require('alexa-voice-service');
 const initializeAVS = require('./initializeAVS');
 const setStatus = require('./setStatus');
-const processSpeech = require('./processSpeech');
-const runDirectives = require('./runDirectives');
 const VoiceActivityDetector = require('./VoiceActivityDetector');
+const Controller = require('./Controller');
 
 function alexaRunner(config, sendNotification){
     var self  = this;
@@ -4314,42 +4636,30 @@ function alexaRunner(config, sendNotification){
     this.sendNotification = sendNotification;
 
     this.avs = null;
-    this.listening = false;
     this.voiceActivityDetector = null;
+    this.controller = new Controller(self);
 
     this.notificationReceived = function(notification){
-        setStatus(self, notification);
+        setStatus(self, notification); // TODO: this status will be gathered from the controller
 
         if(notification === 'ALEXA_START_RECORDING'){
-            if(!self.listening){
-                self.listening = true;
-                self.avs.startRecording();
-
-                if(self.voiceActivityDetector){
-                    setTimeout(function(){
-                        self.voiceActivityDetector.startDetection();
-                    }, 1000);
-                }
-            }
+            self.controller.fsm.listen();
         }else if(notification === 'ALEXA_STOP_RECORDING'){
-            if(self.listening){
-                self.listening = false;
-
-                if(self.voiceActivityDetector){
-                    self.voiceActivityDetector.stopDetection();
-                }
-
-                processSpeech(self).then(({directives, audioMap}) => {
-                    runDirectives(self, directives, audioMap);
-                });
-            }
-
+            self.controller.fsm.stop();
+        }else if(notification === 'ALEXA_AUDIO_PLAY_ENDED'){
+            console.log('-- AUDIO ENDED');
+            self.controller.fsm.finish();
         }
+    //    ALEXA_RECORD_START
+    //    ALEXA_RECORD_STOP
+    //    ALEXA_AUDIO_PLAY_STARTED
+    //    ALEXA_AUDIO_PLAY_ENDED
     };
 
     this.initialize = function(){
         initializeAVS(self).then(() => {
             if(!self.config['disableVoiceActivityDetection']){
+                //TODO: probably these notifications also will be moved to controller, because we'll reduce the responsibility at VAD module, and move it to controller(timeout stuff)
                 self.voiceActivityDetector = new VoiceActivityDetector(function(){
                     self.sendNotification('ALEXA_VAD_VOICE_DETECTION_START');
                 }, function(){
@@ -4359,6 +4669,8 @@ function alexaRunner(config, sendNotification){
                 self.voiceActivityDetector.initialize();
             }
 
+            self.controller.fsm.init();
+
             self.sendNotification('ALEXA_CREATED');
         });
     };
@@ -4366,7 +4678,7 @@ function alexaRunner(config, sendNotification){
 
 window.alexaRunner = alexaRunner;
 module.exports = alexaRunner;
-},{"./VoiceActivityDetector":25,"./initializeAVS":27,"./processSpeech":28,"./runDirectives":29,"./setStatus":30,"alexa-voice-service":1}],27:[function(require,module,exports){
+},{"./Controller":26,"./VoiceActivityDetector":27,"./initializeAVS":29,"./setStatus":32,"alexa-voice-service":1}],29:[function(require,module,exports){
 function initializeAVS(alexaRunner){
     var self = this;
 
@@ -4378,7 +4690,8 @@ function initializeAVS(alexaRunner){
             deviceSerialNumber: 1234,
             token: localStorage.getItem('avsToken'),
             redirectUri: 'https://sakirtemel.github.io/MMM-alexa/',
-            refreshToken: localStorage.getItem('avsRefreshToken')
+            refreshToken: localStorage.getItem('avsRefreshToken'),
+            debug: alexaRunner.config['debug']
         });
 
         alexaRunner.avs.on(AVS.EventTypes.TOKEN_SET, function(){
@@ -4391,6 +4704,14 @@ function initializeAVS(alexaRunner){
 
         alexaRunner.avs.on(AVS.EventTypes.RECORD_STOP, function(){
             alexaRunner.sendNotification('ALEXA_RECORD_STOP');
+        });
+
+        alexaRunner.avs.player.on(AVS.EventTypes.PLAY, function(){
+            alexaRunner.sendNotification('ALEXA_AUDIO_PLAY_STARTED');
+        });
+
+        alexaRunner.avs.player.on(AVS.EventTypes.ENDED, function(){
+            alexaRunner.sendNotification('ALEXA_AUDIO_PLAY_ENDED');
         });
     };
 
@@ -4426,7 +4747,7 @@ function initializeAVS(alexaRunner){
 }
 
 module.exports = initializeAVS;
-},{}],28:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 function processSpeech(alexaRunner){
     return new Promise((resolve, reject) => {
         var audioMap = {};
@@ -4465,13 +4786,16 @@ function processSpeech(alexaRunner){
                     });
                     resolve({directives, audioMap});
                 }
-            }).catch(error => { console.error(error); /* send audio error */ });
+            }).catch(error => {
+                console.error(error); /* send audio error */
+                reject(error);
+            });
         });
     });
 }
 
 module.exports = processSpeech;
-},{}],29:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 function runDirectives(alexaRunner, directives, audioMap){
     var self = this;
 
@@ -4527,20 +4851,8 @@ function runDirectives(alexaRunner, directives, audioMap){
     };
 
     this.SpeechRecognizerListen = function(directive){
-        const timeout = directive.payload.timeoutIntervalInMillis;
-        // enable mic
-        // beep
-
         return function(){
-            if (directives.length > 1){
-                self.alexaRunner.avs.player.one(AVS.Player.EventTypes.ENDED, () => {
-                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
-                });
-            }else{
-                setTimeout(function(){
-                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
-                }, 2000);
-            }
+            self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
         }();
     };
 
@@ -4566,7 +4878,7 @@ function runDirectives(alexaRunner, directives, audioMap){
 }
 
 module.exports = runDirectives;
-},{}],30:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 function setStatus(alexaRunner, notification){
     if (alexaRunner.config['hideStatusIndicator']){
         return true;
@@ -4588,4 +4900,6 @@ function setStatus(alexaRunner, notification){
 }
 
 module.exports = setStatus;
-},{}]},{},[26]);
+
+// TODO : add one more state color, and also connect this to the fsm
+},{}]},{},[28]);

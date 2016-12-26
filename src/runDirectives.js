@@ -53,20 +53,8 @@ function runDirectives(alexaRunner, directives, audioMap){
     };
 
     this.SpeechRecognizerListen = function(directive){
-        const timeout = directive.payload.timeoutIntervalInMillis;
-        // enable mic
-        // beep
-
         return function(){
-            if (directives.length > 1){
-                self.alexaRunner.avs.player.one(AVS.Player.EventTypes.ENDED, () => {
-                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
-                });
-            }else{
-                setTimeout(function(){
-                    self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
-                }, 2000);
-            }
+            self.alexaRunner.sendNotification('ALEXA_START_RECORDING');
         }();
     };
 

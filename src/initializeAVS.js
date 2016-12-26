@@ -9,7 +9,8 @@ function initializeAVS(alexaRunner){
             deviceSerialNumber: 1234,
             token: localStorage.getItem('avsToken'),
             redirectUri: 'https://sakirtemel.github.io/MMM-alexa/',
-            refreshToken: localStorage.getItem('avsRefreshToken')
+            refreshToken: localStorage.getItem('avsRefreshToken'),
+            debug: alexaRunner.config['debug']
         });
 
         alexaRunner.avs.on(AVS.EventTypes.TOKEN_SET, function(){
@@ -22,6 +23,14 @@ function initializeAVS(alexaRunner){
 
         alexaRunner.avs.on(AVS.EventTypes.RECORD_STOP, function(){
             alexaRunner.sendNotification('ALEXA_RECORD_STOP');
+        });
+
+        alexaRunner.avs.player.on(AVS.EventTypes.PLAY, function(){
+            alexaRunner.sendNotification('ALEXA_AUDIO_PLAY_STARTED');
+        });
+
+        alexaRunner.avs.player.on(AVS.EventTypes.ENDED, function(){
+            alexaRunner.sendNotification('ALEXA_AUDIO_PLAY_ENDED');
         });
     };
 

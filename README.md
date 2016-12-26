@@ -109,6 +109,10 @@ You can send the commands from your module like:
 `ALEXA_VAD_VOICE_DETECTION_START` : There's a voice activity right now.
 
 `ALEXA_VAD_VOICE_DETECTION_STOP` : Voice activity ended.
+
+`ALEXA_AUDIO_PLAY_STARTED` : Response playing.
+
+`ALEXA_AUDIO_PLAY_ENDED` : Response playing ended.
  
 ## Tested on
 
@@ -128,6 +132,10 @@ Feel free to create Pull Requests, or issues as new ideas. Current plan for deve
   * Add error sound on empty response
   * Fix threading issues, it hangs when there are multiple commands sent
   * Add blog post link
+  * Make snowboy hotword configurable
+  * Research about noise cancelling
+  * Extract the Alexa module to be a standalone javascript solution without being connected to mirror
+  * Stop everything on hotword detection
 
 ## Special thanks
 

@@ -7,6 +7,10 @@ Module.register("MMM-alexa",{
         var sendNotification = function(notification){
             self.alexaRunner.notificationReceived(notification);
             self.sendNotification(notification, {});
+
+            if(notification.startsWith('ALEXA_')){
+                self.sendSocketNotification(notification, {});
+            }
         };
 
         this.alexaRunner = new window.alexaRunner(this.config, sendNotification);
@@ -57,6 +61,7 @@ Module.register("MMM-alexa",{
 
         if(notification.startsWith('ALEXA_')){
             this.alexaRunner.notificationReceived(notification);
+            self.sendSocketNotification(notification, {});
         }
     }
 });
