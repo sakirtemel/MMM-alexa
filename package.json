@@ -14,8 +14,10 @@
     "cors": "^2.7.1",
     "http-message-parser": "^0.0.20",
     "multer": "^1.1.0",
+    "node-record-lpcm16": "^0.2.0",
     "onoff": "^1.1.1",
     "request": "^2.72.0",
+    "snowboy": "^1.1.0",
     "voice-activity-detection": "^0.0.3"
   },
   "devDependencies": {
